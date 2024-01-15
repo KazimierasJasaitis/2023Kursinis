@@ -1,7 +1,7 @@
 import numpy as np
 
 class Particle:
-    def __init__(self, dimensions, min_scale, max_scale):
+    def __init__(self, dimensions, min_scale, max_scale, paper_size):
         # Number of images
         position_count = dimensions // 3
         x_coordinates = np.empty(position_count)
@@ -11,6 +11,7 @@ class Particle:
         self.min_scale = min_scale
         self.max_scale = max_scale
 
+        paper_height, paper_width = paper_size
         for i in range(position_count):
             # Randomly initialize x and y coordinates
             x_coordinates[i] = np.random.uniform(0, paper_width)
@@ -124,7 +125,7 @@ class Particle:
                     overlapping_area_penalty * overlap_penalty_factor
         #print("area: ",sum_image_areas,", overlapping: ", overlapping_area, "boundary: ", boundary_penalty )
         #if fitness < 0: print(f"Area: {sum_image_areas}, Overlapping: {overlapping_area}, Boundary: {boundary_penalty}")
-        if fitness <= 0: print(f"1: {total_resizing_deviation}, 2: {boundary_penalty}, 3: {uncovered_area_penalty}, 4:{overlapping_area_penalty}") 
+        #if fitness <= 0: print(f"1: {total_resizing_deviation}, 2: {boundary_penalty}, 3: {uncovered_area_penalty}, 4:{overlapping_area_penalty}") 
 
         return fitness
     
@@ -140,35 +141,42 @@ class Particle:
 
 
 class PSO:
-    def __init__(self, population_size, dimensions, image_sizes, paper_size, desired_fitness, w, c1, c2):
-        self.population_size = population_size
-        self.dimensions = dimensions
-        self.image_sizes = image_sizes
+    def __init__(self, paper_size, image_sizes, dimensions, 
+                 iterations_without_improvement_limit=float('inf'),
+                 desired_fitness=0, population_size=100,
+                 w=0.9, c1=2, c2=2):
         self.paper_size = paper_size
+        self.image_sizes = image_sizes
+        self.dimensions = dimensions
+        self.iterations_without_improvement_limit = iterations_without_improvement_limit
         self.desired_fitness = desired_fitness
+        self.population_size = population_size
         self.w = w
         self.c1 = c1
         self.c2 = c2
+
         self.gbest_position = np.zeros(dimensions)
         self.gbest_fitness = float('inf')
         self.iterations = 0
         self.iterations_without_improvement = 0
+
         # Calculate total x and y lengths of all images
         self.sum_x_lengths = np.sum([size[0] for size in image_sizes])
         self.sum_y_lengths = np.sum([size[1] for size in image_sizes])
 
+        paper_height, paper_width = paper_size
         # Calculate min and max scale values
         self.max_scale = max(paper_height,paper_width)/min(val for sublist in image_sizes for val in sublist)
         self.min_scale = min(paper_height/self.sum_y_lengths,paper_width/self.sum_x_lengths)
-        self.population = [Particle(dimensions, self.min_scale, self.max_scale) for _ in range(population_size)]
+        self.population = [Particle(dimensions, self.min_scale, self.max_scale, self.paper_size) for _ in range(population_size)]
 
     def run(self):
         while self.gbest_fitness > self.desired_fitness:
-            if self.iterations_without_improvement >= 1500:
+            if self.iterations_without_improvement >= self.iterations_without_improvement_limit:
                 break
             self.iterations_without_improvement += 1
             self.iterations += 1
-            print(f"\r{self.iterations}", end='', flush=True)
+            # print(f"\r{self.iterations}", end='', flush=True)
             for particle in self.population:
                 fitness = particle.compute_fitness(self.image_sizes, self.paper_size)
                 if fitness < particle.pbest_fitness:
@@ -199,20 +207,27 @@ class PSO:
 
 # Example usage:
 if __name__ == "__main__":
+
     paper_width = 100
     paper_height = 150
     paper_size = (paper_width, paper_height)
-
+    image_sizes = [[1000,500],[1000,500],[500,500],[500,500]]
+    N = len(image_sizes)
+    dimensions = 3 * N
+    population_size = 50
+    desired_fitness = 0
+    iterations_without_improvement_limit = 1000
     w = 0.7
     c1 = 1
     c2 = 2
 
-    image_sizes = [[1000,500],[1000,500],[500,500],[500,500]]
-
-    N = len(image_sizes)
-    dimensions = 3 * N
-
-    pso = PSO(population_size=500, dimensions=dimensions, image_sizes=image_sizes, paper_size=paper_size, desired_fitness=0, w=w, c1=c1, c2=c2)
+    pso = PSO(paper_size=paper_size, 
+              image_sizes=image_sizes, 
+              dimensions=dimensions,
+              population_size=population_size, 
+              desired_fitness=desired_fitness, 
+              iterations_without_improvement_limit=iterations_without_improvement_limit,
+              w=w, c1=c1, c2=c2)
 
     best_position = pso.run()
     print("\n")
@@ -223,10 +238,6 @@ if __name__ == "__main__":
     for i, (x, y, scale) in enumerate(best_position_2d):
         print(f"Image {i+1}: x = {round(x)}, y = {round(y)}, scale = {round(scale,2)}")
     print(pso.iterations)
-
-
-
-
 
 
     from PIL import Image, ImageDraw

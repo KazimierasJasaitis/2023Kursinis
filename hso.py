@@ -1,7 +1,6 @@
 import numpy as np
 from PIL import Image, ImageDraw
 
-iterations = 0
 class Harmony:
     def __init__(self, dimensions, image_sizes, paper_size):
         # Initialize harmony similar to Particle's initialization
@@ -128,30 +127,31 @@ class Harmony:
         return fitness
 
 class HarmonySearch:
-    def __init__(self, HM_size, dimensions, image_sizes, paper_size, desired_fitness, memory_consideration_rate=0.8, pitch_adjustment_rate=0.4, pitch_bandwidth=0.1, lower_bound=None, upper_bound=None):
-        self.HM_size = HM_size
-        self.dimensions = dimensions
-        self.image_sizes = image_sizes
+    def __init__(self, paper_size, image_sizes, dimensions, 
+                 iterations_without_improvement_limit=float('inf'), 
+                 desired_fitness=0, HM_size=50,
+                 memory_consideration_rate=0.8, pitch_adjustment_rate=0.4, 
+                 pitch_bandwidth=0.1):
         self.paper_size = paper_size
+        self.image_sizes = image_sizes
+        self.dimensions = dimensions
+        self.iterations_without_improvement_limit = iterations_without_improvement_limit        
         self.desired_fitness = desired_fitness
+        self.HM_size = HM_size
         self.memory_consideration_rate = memory_consideration_rate
         self.pitch_adjustment_rate = pitch_adjustment_rate
         self.pitch_bandwidth = pitch_bandwidth
 
-        # Set lower and upper bounds
-        if lower_bound is None:
-            self.lower_bound = [0] * dimensions  # Example default value
-        else:
-            self.lower_bound = lower_bound
-
-        if upper_bound is None:
-            self.upper_bound = [max(paper_size)] * dimensions  # Example default value
-        else:
-            self.upper_bound = upper_bound
-
-        self.HM = [Harmony(dimensions, image_sizes, paper_size) for _ in range(HM_size)]
         self.best_harmony = None
         self.best_fitness = float('inf')
+        self.iterations = 0
+        self.iterations_without_improvement = 0
+
+        # Set lower and upper bounds
+        self.lower_bound = [0] * dimensions  # Example default value
+        self.upper_bound = [max(paper_size)] * dimensions  # Example default value
+
+        self.HM = [Harmony(dimensions, image_sizes, paper_size) for _ in range(HM_size)]
 
     def improvise_new_harmony(self):
         new_harmony = Harmony(self.dimensions, self.image_sizes, self.paper_size)
@@ -182,17 +182,20 @@ class HarmonySearch:
 
         # Main loop for Harmony Search
         while self.best_fitness > self.desired_fitness:
-            global iterations
-            iterations += 1
-            if (iterations % 1000) == 0:
-                print(f"iterations: {iterations}; best fitness: {self.best_fitness}")
-            if (iterations == 300000):
-                return self.best_harmony.position
+            if self.iterations_without_improvement >= self.iterations_without_improvement_limit:
+                break
+            self.iterations_without_improvement += 1
+            self.iterations += 1
+
+            # if (self.iterations % 1000) == 0:
+            #     print(f"iterations: {self.iterations}; best fitness: {self.best_fitness}")
+
             new_harmony = self.improvise_new_harmony()
             new_fitness = new_harmony.compute_fitness(self.image_sizes, self.paper_size)
             if new_fitness < self.best_fitness:
                 self.best_fitness = new_fitness
                 self.best_harmony = new_harmony
+                self.iterations_without_improvement = 0
             self.update_harmony_memory(new_harmony)
         
         return self.best_harmony.position
@@ -203,16 +206,33 @@ if __name__ == "__main__":
     paper_size = (10, 10)
     image_sizes = [[500, 500], [500, 500], [500, 500], [500, 500]]
     dimensions = 3 * len(image_sizes)
+    iterations_without_improvement_limit = 1000
+    desired_fitness = 0
+    HM_size = 50
+    memory_consideration_rate = 0.8
+    pitch_adjustment_rate = 0.4
+    pitch_bandwidth = 0.1
 
-    hs = HarmonySearch(HM_size=50, dimensions=dimensions, image_sizes=image_sizes, paper_size=paper_size, desired_fitness=0)
-    best_position = hs.run()
+    hso = HarmonySearch(paper_size=paper_size, 
+                        image_sizes=image_sizes, 
+                        dimensions=dimensions, 
+                        iterations_without_improvement_limit=iterations_without_improvement_limit, 
+                        desired_fitness=desired_fitness, 
+                        HM_size=HM_size, 
+                        memory_consideration_rate=memory_consideration_rate, 
+                        pitch_adjustment_rate=pitch_adjustment_rate, 
+                        pitch_bandwidth=pitch_bandwidth)
+    
+    best_position = hso.run()
 
     # Print each image's position and scale factor
     best_position_2d = best_position.reshape(-1, 3)
     for i, (x, y, scale) in enumerate(best_position_2d):
         print(f"Image {i+1}: x = {round(x)}, y = {round(y)}, scale = {round(scale, 2)}")
 
-    print(iterations)
+    print(hso.iterations)
+
+
     # Visualization (same as in PSO)
     img = Image.new('RGB', paper_size, color=(255, 255, 255))
     draw = ImageDraw.Draw(img)

@@ -1,49 +1,58 @@
-import hso
-import pso
+import hso as hs
+import pso as ps
 import csv
+import sys
+
+# Setup the constant parameters
+paper_size = (100, 100)
+image_sizes = [[50, 50], [50, 50], [50, 50], [50, 50]]
+dimensions = 3 * len(image_sizes)
+iterations_without_improvement_limit = 200
+desired_fitness = 0
 
 def run_hso(parameters):
-    # Setup the constant parameters
-    paper_size = (10, 10)
-    image_sizes = [[500, 500], [500, 500], [500, 500], [500, 500]]
-    dimensions = 3 * len(image_sizes)
-    desired_fitness = 0
-
-    # Initialize HarmonySearch with both constant and variable parameters
-    hs = hso.HarmonySearch(HM_size=parameters['HM_size'], 
-                           dimensions=dimensions, 
-                           image_sizes=image_sizes, 
-                           paper_size=paper_size, 
-                           desired_fitness=desired_fitness, 
-                           memory_consideration_rate=parameters['memory_consideration_rate'], 
-                           pitch_adjustment_rate=parameters['pitch_adjustment_rate'])
-    best_position = hs.run()
-        # Open CSV file in append mode
-    with open("parameterTestResults.csv", 'a', newline='') as file:
+    hso = hs.HarmonySearch(paper_size=paper_size, 
+                        image_sizes=image_sizes, 
+                        dimensions=dimensions, 
+                        iterations_without_improvement_limit=iterations_without_improvement_limit, 
+                        desired_fitness=desired_fitness, 
+                        HM_size=parameters['HM_size'], 
+                        memory_consideration_rate=parameters['memory_consideration_rate'], 
+                        pitch_adjustment_rate=parameters['pitch_adjustment_rate'],
+                        pitch_bandwidth=parameters['pitch_bandwidth'])
+    
+    best_position = hso.run()
+    # Open CSV file in append mode
+    with open("parameterTestResultsHso.csv", 'a', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow([parameters['HM_size'], parameters['memory_consideration_rate'], parameters['pitch_adjustment_rate'], hs.best_fitness])
+        writer.writerow([parameters['HM_size'], 
+                         parameters['memory_consideration_rate'], 
+                         parameters['pitch_adjustment_rate'], 
+                         hso.best_fitness,
+                         hso.iterations])
 
-    return hs.best_fitness
+    return hso.best_fitness, hso.iterations
 
-def run_pso(population_size, dimensions, image_sizes, paper_size, desired_fitness, w, c1, c2):
-    # Initialize the PSO instance with the given parameters
-    pso = pso.PSO(population_size=population_size, dimensions=dimensions, image_sizes=image_sizes, paper_size=paper_size, desired_fitness=desired_fitness, w=w, c1=c1, c2=c2)
+def run_pso(parameters):
 
-    # Run the PSO algorithm
+    pso = ps.PSO(paper_size=paper_size, 
+              image_sizes=image_sizes, 
+              dimensions=dimensions,
+              population_size=parameters['population_size'], 
+              desired_fitness=desired_fitness, 
+              iterations_without_improvement_limit=iterations_without_improvement_limit/parameters['population_size'],
+              w=parameters['w'], c1=parameters['c1'], c2=parameters['c2'])
+
     best_position = pso.run()
-    print("\nBest Fitness:", pso.gbest_fitness)
-
-    # Process and print the results
-    best_position_2d = best_position.reshape(-1, 3)
-    for i, (x, y, scale) in enumerate(best_position_2d):
-        print(f"Image {i+1}: x = {round(x)}, y = {round(y)}, scale = {round(scale, 2)}")
 
     # Open CSV file in append mode
-    with open("parameterTestResults.csv", 'a', newline='') as file:
+    with open("parameterTestResultsPso.csv", 'a', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow([population_size, w, c1, c2, pso.gbest_fitness, pso.iterations])
-    # Return the best position and other relevant information
-    return best_position, pso.gbest_fitness, pso.iterations
+        writer.writerow([parameters['population_size'], parameters['w'], parameters['c1'], parameters['c2'], pso.gbest_fitness, pso.iterations, pso.population_size*pso.iterations])
+
+    # Return the best fitness
+    return pso.gbest_fitness, pso.iterations*pso.population_size
+
 
 
 def find_best_parameters(algorithm):
@@ -52,9 +61,9 @@ def find_best_parameters(algorithm):
 
     # Define bounds and steps for each parameter
     if algorithm == 'hso':
-        HM_size_range = range(10, 100, 10)  # Example: 50 to 150 with step 50
-        memory_consideration_rate_range = np.arange(0.7, 0.95, 0.05)  # Example: 0.5 to 0.8 with step 0.1
-        pitch_adjustment_rate_range = np.arange(0.1, 0.5, 0.1)  # Example: 0.2 to 0.5 with step 0.1
+        HM_size_range = range(10, 210, 10)
+        memory_consideration_rate_range = np.arange(0.1, 1.1, 0.05)
+        pitch_adjustment_rate_range = np.arange(0.1, 1.1, 0.05)
 
         for HM_size in HM_size_range:
             for memory_consideration_rate in memory_consideration_rate_range:
@@ -63,18 +72,29 @@ def find_best_parameters(algorithm):
                         'HM_size': HM_size,
                         'memory_consideration_rate': memory_consideration_rate,
                         'pitch_adjustment_rate': pitch_adjustment_rate,
+                        'pitch_bandwidth': 0.1
                     }
+                    # Format each floating-point number in the dictionary
+                    formatted_params = {k: f"{v:.2f}" if isinstance(v, float) else v for k, v in params.items()}
                     
-                    performance = run_hso(params)
+                    print(f"\rCurrent parameters: {formatted_params}                           ",
+                           end='', flush=True)
+                    fitness, iterations = run_hso(params)
+                    if fitness == 0:
+                        performance = iterations
+                    else:
+                        performance = fitness + iterations * 1000
+
                     if performance < best_performance:
                         best_performance = performance
                         best_parameters = params
 
     elif algorithm == 'pso':
-        population_size_range = range(20, 50, 5)  # Example: 30 to 100 with step 10
-        w_range = np.arange(0.9, 1.2, 0.05)  # Example: 0.4 to 0.8 with step 0.1
-        c1_range = np.arange(1.5, 2.0, 0.1)  # Example: 1.0 to 2.0 with step 0.5
-        c2_range = np.arange(1.5, 2.0, 0.1)  # Example: 1.0 to 2.0 with step 0.5
+        population_size_range = range(10, 210, 10)
+        w_range = np.arange(0.1, 1.1, 0.1)
+        c1_range = np.arange(0.1, 2.6, 0.1)
+        c2_range = np.arange(0.1, 2.6, 0.1)
+
 
         for population_size in population_size_range:
             for w in w_range:
@@ -86,7 +106,17 @@ def find_best_parameters(algorithm):
                             'c1': c1,
                             'c2': c2,
                         }
-                        performance = run_pso(params)
+                        # Format each floating-point number in the dictionary
+                        formatted_params = {k: f"{v:.2f}" if isinstance(v, float) else v for k, v in params.items()}
+                        
+                        print(f"\rCurrent parameters: {formatted_params}                   ",
+                               end='', flush=True)
+                        fitness, iterations = run_pso(params)
+                        if fitness == 0:
+                            performance = iterations
+                        else:
+                            performance = fitness + iterations * 1000
+
                         if performance < best_performance:
                             best_performance = performance
                             best_parameters = params
@@ -97,8 +127,20 @@ def find_best_parameters(algorithm):
 if __name__ == "__main__":
     import numpy as np
 
-    best_hso_params, best_hso_perf = find_best_parameters('hso')
-    print("Best HSO Parameters:", best_hso_params, "Performance:", best_hso_perf)
+    with open("parameterTestResultsHso.csv", 'a', newline='') as file:
+        # Open CSV file to write header string
+        writer = csv.writer(file)
+        writer.writerow(["HM size", "memory_consideration_rate", "pitch_adjustment_rate", "fitness"])
 
+    best_hso_params, best_hso_perf = find_best_parameters('hso')
+    print(f"\rBest HSO Parameters: {best_hso_params} Performance: {best_hso_perf}            ",end='', flush=True)
+    print("\n")
+
+    with open("parameterTestResultsPso.csv", 'a', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["population_size", "w", "c1", "c2", "fitness", "iterations", "particles"])
+    
     best_pso_params, best_pso_perf = find_best_parameters('pso')
-    print("Best PSO Parameters:", best_pso_params, "Performance:", best_pso_perf)
+    print(f"\rBest PSO Parameters: {best_pso_params} Performance: {best_pso_perf}            ",end='', flush=True)
+
+
