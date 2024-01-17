@@ -14,7 +14,7 @@ def run_hso(parameters):
     hso = hs.HarmonySearch(paper_size=paper_size, 
                         image_sizes=image_sizes, 
                         dimensions=dimensions, 
-                        iterations_without_improvement_limit=iterations_without_improvement_limit, 
+                        iterations_without_improvement_limit=iterations_without_improvement_limit*10, 
                         desired_fitness=desired_fitness, 
                         HM_size=parameters['HM_size'], 
                         memory_consideration_rate=parameters['memory_consideration_rate'], 
@@ -40,7 +40,7 @@ def run_pso(parameters):
               dimensions=dimensions,
               population_size=parameters['population_size'], 
               desired_fitness=desired_fitness, 
-              iterations_without_improvement_limit=iterations_without_improvement_limit/parameters['population_size'],
+              iterations_without_improvement_limit=(iterations_without_improvement_limit*10)/parameters['population_size'],
               w=parameters['w'], c1=parameters['c1'], c2=parameters['c2'])
 
     best_position = pso.run()
@@ -62,38 +62,40 @@ def find_best_parameters(algorithm):
     # Define bounds and steps for each parameter
     if algorithm == 'hso':
         HM_size_range = range(10, 210, 10)
-        memory_consideration_rate_range = np.arange(0.1, 1.1, 0.05)
-        pitch_adjustment_rate_range = np.arange(0.1, 1.1, 0.05)
+        memory_consideration_rate_range = np.arange(0.1, 1.1, 0.1)
+        pitch_adjustment_rate_range = np.arange(0.1, 1.1, 0.1)
+        pitch_bandwidth_range = np.arange(0.1, 1.1, 0.1)
 
         for HM_size in HM_size_range:
             for memory_consideration_rate in memory_consideration_rate_range:
                 for pitch_adjustment_rate in pitch_adjustment_rate_range:
-                    params = {
-                        'HM_size': HM_size,
-                        'memory_consideration_rate': memory_consideration_rate,
-                        'pitch_adjustment_rate': pitch_adjustment_rate,
-                        'pitch_bandwidth': 0.1
-                    }
-                    # Format each floating-point number in the dictionary
-                    formatted_params = {k: f"{v:.2f}" if isinstance(v, float) else v for k, v in params.items()}
-                    
-                    print(f"\rCurrent parameters: {formatted_params}                           ",
-                           end='', flush=True)
-                    fitness, iterations = run_hso(params)
-                    if fitness == 0:
-                        performance = iterations
-                    else:
-                        performance = fitness + iterations * 1000
+                    for pitch_bandwidth in pitch_bandwidth_range:
+                        params = {
+                            'HM_size': HM_size,
+                            'memory_consideration_rate': memory_consideration_rate,
+                            'pitch_adjustment_rate': pitch_adjustment_rate,
+                            'pitch_bandwidth': pitch_bandwidth,
+                        }
+                        # Format each floating-point number in the dictionary
+                        formatted_params = {k: f"{v:.2f}" if isinstance(v, float) else v for k, v in params.items()}
+                        
+                        print(f"\rCurrent parameters: {formatted_params}                           ",
+                            end='', flush=True)
+                        fitness, iterations = run_hso(params)
+                        if fitness == 0:
+                            performance = iterations
+                        else:
+                            performance = fitness + iterations * 1000
 
-                    if performance < best_performance:
-                        best_performance = performance
-                        best_parameters = params
+                        if performance < best_performance:
+                            best_performance = performance
+                            best_parameters = params
 
     elif algorithm == 'pso':
         population_size_range = range(10, 210, 10)
         w_range = np.arange(0.1, 1.1, 0.1)
-        c1_range = np.arange(0.1, 2.6, 0.1)
-        c2_range = np.arange(0.1, 2.6, 0.1)
+        c1_range = np.arange(0.1, 2.1, 0.2)
+        c2_range = np.arange(0.1, 2.1, 0.2)
 
 
         for population_size in population_size_range:
